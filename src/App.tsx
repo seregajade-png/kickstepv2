@@ -12,6 +12,12 @@ const CartPage = lazy(() => import('./pages/CartPage'))
 const WishlistPage = lazy(() => import('./pages/WishlistPage'))
 const SearchPage = lazy(() => import('./pages/SearchPage'))
 const CheckoutPage = lazy(() => import('./pages/CheckoutPage'))
+const HelpPage = lazy(() => import('./pages/HelpPage'))
+const DeliveryPage = lazy(() => import('./pages/DeliveryPage'))
+const PaymentPage = lazy(() => import('./pages/PaymentPage'))
+const ReturnsPage = lazy(() => import('./pages/ReturnsPage'))
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage'))
+const OfferPage = lazy(() => import('./pages/OfferPage'))
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -53,6 +59,12 @@ function App() {
                 <a href="/catalog" className="inline-block py-3 px-8 bg-black text-white text-sm font-semibold rounded-[24px]">В каталог</a>
               </div>
             } />
+            <Route path="/help" element={<HelpPage />} />
+            <Route path="/delivery" element={<DeliveryPage />} />
+            <Route path="/payment" element={<PaymentPage />} />
+            <Route path="/returns" element={<ReturnsPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/offer" element={<OfferPage />} />
             <Route path="/men" element={<CatalogPage />} />
             <Route path="/women" element={<CatalogPage />} />
             <Route path="*" element={
