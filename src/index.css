@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+/* Fonts */
+@font-face {
+  font-family: 'Involve';
+  src: url('/fonts/Involve-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Involve';
+  src: url('/fonts/Involve-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Involve';
+  src: url('/fonts/Involve-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Involve';
+  src: url('/fonts/Involve-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Maver';
+  src: url('/fonts/Maver-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+
+/* Base */
+html {
+  scroll-behavior: smooth;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Involve', -apple-system, Roboto, Helvetica, sans-serif;
+  color: #0A0A0A;
+  background: #FFFFFF;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar hide */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Focus visible */
+button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
+
+/* Custom theme */
+@theme {
+  --color-black: #0A0A0A;
+  --color-gray-100: #F4F4F4;
+  --color-gray-150: #F0F0F0;
+  --color-gray-300: #D1D1D1;
+  --color-gray-400: #B5B5B5;
+  --color-gray-600: #6E6E6E;
+  --color-red-500: #EC221F;
+  --color-footer: #2C2C2E;
+  --color-telegram: #0088CC;
+  --radius-card: 14px;
+  --radius-pill: 24px;
+  --radius-section: 30px;
+}
