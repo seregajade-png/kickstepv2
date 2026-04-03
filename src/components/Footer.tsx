@@ -2,53 +2,51 @@ import { Link } from 'react-router-dom'
 
 const sections = [
   {
-    title: 'Помощь',
+    title: 'Всё о заказе',
     links: [
-      { label: 'Условия доставки', to: '/delivery' },
-      { label: 'Способы оплаты', to: '/payment' },
-      { label: 'Обмен и возврат', to: '/returns' },
-      { label: 'FAQ', to: '/faq' },
+      { label: 'Заказ и оплата', to: '/payment' },
+      { label: 'Доставка', to: '/delivery' },
+      { label: 'Правила возврата', to: '/returns' },
     ],
   },
   {
-    title: 'О компании',
+    title: 'Сервис и помощь',
     links: [
-      { label: 'О нас', to: '/about' },
+      { label: 'Часто задаваемые вопросы', to: '/help' },
+      { label: 'Таблицы размеров', to: '/size-guide' },
       { label: 'Контакты', to: '/contacts' },
-      { label: 'Политика конфиденциальности', to: '/privacy' },
-      { label: 'Договор оферты', to: '/offer' },
+    ],
+  },
+  {
+    title: 'Юридический раздел',
+    links: [
+      { label: 'Персональные данные', to: '/privacy' },
+      { label: 'Публичная оферта', to: '/offer' },
     ],
   },
 ]
 
 export default function Footer() {
   return (
-    <footer className="bg-footer text-white pt-6 pb-8 px-4 mt-auto">
-      <div className="max-w-[1440px] mx-auto">
-        {/* Logo */}
-        <Link to="/" className="text-2xl font-semibold tracking-tight block mb-6">
-          KICKSTEP
-        </Link>
-
-        {/* Sections */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
+    <footer className="border-t border-gray-300 mt-auto">
+      <div className="px-4 pt-8 pb-6 max-w-[1440px] mx-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {sections.map((section) => (
             <div key={section.title}>
-              <h3 className="text-base font-semibold mb-2">{section.title}</h3>
+              <h3 className="text-base font-semibold text-black mb-2">{section.title}</h3>
               <div className="flex flex-col gap-1">
                 {section.links.map((link) => (
-                  <Link key={link.label} to={link.to} className="text-sm font-medium text-gray-400 hover:text-white transition">
+                  <Link
+                    key={link.label}
+                    to={link.to}
+                    className="text-sm font-medium text-gray-400 hover:text-black transition"
+                  >
                     {link.label}
                   </Link>
                 ))}
               </div>
             </div>
           ))}
-        </div>
-
-        {/* Bottom */}
-        <div className="mt-8 pt-4 border-t border-gray-600 text-xs text-gray-400">
-          KICKSTEP © {new Date().getFullYear()}
         </div>
       </div>
     </footer>
