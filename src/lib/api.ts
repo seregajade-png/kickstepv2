@@ -2,7 +2,10 @@
  * Strapi API client for KICKSTEP store
  */
 
-const API_URL = import.meta.env.VITE_API_URL || '';
+// In production on proxy server, use relative /proxy-api/ to avoid CORS
+// In dev, use VITE_API_URL (kickstep.ru)
+const API_URL = import.meta.env.VITE_API_URL || ''
+const isProxyMode = !API_URL // empty = use proxy
 
 interface StrapiResponse<T> {
   data: T;
@@ -152,17 +155,23 @@ export interface ApiFilters {
 
 // ─── Helper to build full image URL ────────────────
 
+function toImageUrl(url: string): string {
+  if (url.startsWith('http')) return url;
+  // In proxy mode (sneaker.moscow), route images through /proxy-uploads/
+  // so they don't hit kickstep.ru directly (which may be blocked for user ISP).
+  if (isProxyMode) return `/proxy-uploads${url.replace('/uploads', '')}`;
+  return `https://kickstep.ru${url}`;
+}
+
 export function getImageUrl(image?: StrapiImage | null): string {
   if (!image) return '';
-  if (image.url.startsWith('http')) return image.url;
-  return `${API_URL}${image.url}`;
+  return toImageUrl(image.url);
 }
 
 export function getImageUrlSmall(image?: StrapiImage | null): string {
   if (!image) return '';
   const small = image.formats?.small?.url || image.formats?.medium?.url || image.url;
-  if (small.startsWith('http')) return small;
-  return `${API_URL}${small}`;
+  return toImageUrl(small);
 }
 
 export function getImageUrls(images?: StrapiImage[] | null): string[] {
@@ -181,7 +190,7 @@ async function apiFetch<T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<T> {
-  const url = `${API_URL}/api${endpoint}`;
+  const url = isProxyMode ? `/proxy-api${endpoint}` : `${API_URL}/api${endpoint}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
@@ -262,12 +271,21 @@ export const api = {
       qs.set('filters[is_featured][$eq]', 'true');
     if (params?.search) {
       if (params.search.includes('|')) {
-        const terms = params.search.split('|').map(t => t.trim());
+        const terms = params.search.split('|').map(t => t.trim()).filter(Boolean);
         terms.forEach((term, i) => {
           qs.set(`filters[$or][${i}][name][$containsi]`, term);
         });
       } else {
-        qs.set('filters[name][$containsi]', params.search);
+        // Split on whitespace → AND (each term must appear, order-independent).
+        // Needed because Strapi $containsi is literal, so "yeezy 350" misses "Yeezy Boost 350".
+        const terms = params.search.trim().split(/\s+/).filter(Boolean);
+        if (terms.length === 1) {
+          qs.set('filters[name][$containsi]', terms[0]);
+        } else {
+          terms.forEach((term, i) => {
+            qs.set(`filters[$and][${i}][name][$containsi]`, term);
+          });
+        }
       }
     }
     if (params?.gender) {

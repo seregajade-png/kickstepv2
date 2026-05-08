@@ -1,14 +1,29 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
-import { Heart, ArrowLeft, ChevronDown, ShoppingBag } from 'lucide-react'
 import { useProduct, useProducts } from '../hooks/useApi'
 import { mapApiProduct } from '../lib/mappers'
 import { useCartStore } from '../stores/cartStore'
 import { useWishlistStore } from '../stores/wishlistStore'
 import ProductCard from '../components/ProductCard'
+import { useIsDesktop } from '../hooks/useMediaQuery'
+import ProductDesktop from './ProductDesktop'
+import { addToRecentlyViewed, useRecentlyViewedSlugs } from '../hooks/useRecentlyViewed'
+import { euToCm } from '../lib/sizeConversion'
 
-export default function ProductPage() {
+function RecentCard({ slug }: { slug: string }) {
+  const { data } = useProduct(slug)
+  const product = data ? mapApiProduct(data) : null
+  if (!product) return null
+  return <div style={{ flexShrink: 0, width: '9.75rem' }}><ProductCard product={product} /></div>
+}
+
+const F = "'Involve-SemiBold', Helvetica"
+const FM = "'Involve-Medium', Helvetica"
+const FB = "'Involve-Bold', Helvetica"
+const FR = "'Involve-Regular', Helvetica"
+
+function ProductMobile() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
   const addToCart = useCartStore((s) => s.addItem)
@@ -17,234 +32,312 @@ export default function ProductPage() {
   const { data: apiProduct, isLoading } = useProduct(slug || '')
   const product = apiProduct ? mapApiProduct(apiProduct) : null
 
-  const { data: suggestedData } = useProducts(
-    product ? { pageSize: 8, sort: 'popular' } : undefined
-  )
+  const { data: suggestedData } = useProducts(product ? { pageSize: 8, sort: 'popular' } : undefined)
   const suggestedProducts = useMemo(() =>
-    (suggestedData?.data || [])
-      .map(mapApiProduct)
-      .filter((p) => p.slug !== slug && p.brand !== product?.brand)
-      .slice(0, 4),
-    [suggestedData, slug, product]
+    (suggestedData?.data || []).map(mapApiProduct).filter((p) => p.slug !== slug).slice(0, 4),
+    [suggestedData, slug]
   )
 
-  const colorSiblings = useMemo(() => product?.colorSiblings || [], [product])
+  const recentSlugs = useRecentlyViewedSlugs(slug)
+  useEffect(() => { if (slug) addToRecentlyViewed(slug) }, [slug])
 
-  const [activeImageIndex, setActiveImageIndex] = useState(0)
+  const [activeImg, setActiveImg] = useState(0)
   const [selectedSize, setSelectedSize] = useState<string | null>(null)
-  const [sizeDropdownOpen, setSizeDropdownOpen] = useState(false)
-  const [addedToCart, setAddedToCart] = useState(false)
+  const [openAccordion, setOpenAccordion] = useState<string | null>('about')
   const [touchStart, setTouchStart] = useState<number | null>(null)
 
-  useEffect(() => {
-    setActiveImageIndex(0)
-    setSelectedSize(null)
-  }, [slug])
+  useEffect(() => { setActiveImg(0); setSelectedSize(null) }, [slug])
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 border-2 border-black border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
+  if (isLoading) return (
+    <div style={{ display: 'flex', justifyContent: 'center', padding: '5rem' }}>
+      <div style={{ width: '2rem', height: '2rem', border: '0.125rem solid #0A0A0A', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+    </div>
+  )
+  if (!product) return (
+    <div style={{ padding: '5rem 1rem', textAlign: 'center' }}>
+      <p style={{ fontSize: '1.25rem', fontWeight: 600, fontFamily: F }}>Товар не найден</p>
+      <Link to="/catalog" style={{ color: '#6E6E6E', fontSize: '0.875rem', fontFamily: FM }}>Вернуться в каталог</Link>
+    </div>
+  )
 
-  if (!product) {
-    return (
-      <div className="px-4 py-20 text-center">
-        <h1 className="text-2xl font-semibold mb-4">Товар не найден</h1>
-        <Link to="/catalog" className="text-sm text-gray-600 underline">Вернуться в каталог</Link>
-      </div>
-    )
-  }
-
-  const allImages = product.images
+  const images = product.images
   const inWishlist = isInWishlist(product.id)
-  const selectedSizeObj = product.sizes.find((s) => s.eu === selectedSize)
+  const sizeObj = product.sizes.find((s) => s.eu === selectedSize)
   const hasDiscount = product.oldPrice && product.oldPrice > product.price
 
-  const handleToggleWishlist = () => {
-    if (inWishlist) {
-      removeFromWishlist(product.id)
-    } else {
-      addToWishlist({
-        id: product.id, slug: product.slug, name: product.name, brand: product.brand,
-        image: product.images[0], price: product.price, colorName: product.colorName, colorHex: product.colorHex,
-      })
-    }
+  const toggleWishlist = () => {
+    if (inWishlist) removeFromWishlist(product.id)
+    else addToWishlist({ id: product.id, slug: product.slug, name: product.name, brand: product.brand, image: images[0], price: product.price, colorName: product.colorName, colorHex: product.colorHex })
   }
 
   const handleAddToCart = () => {
-    if (product.sizes.length > 0 && !selectedSize) {
-      setSizeDropdownOpen(true)
-      return
-    }
-    addToCart({
-      id: product.id, slug: product.slug, name: product.name, brand: product.brand,
-      image: allImages[0], price: product.price, oldPrice: product.oldPrice,
-      color: product.colorName || 'Default',
-      sizeRu: selectedSizeObj?.ru || '', sizeEu: selectedSizeObj?.eu || selectedSize || '',
-      quantity: 1, addedAt: new Date().toISOString(),
-    })
-    setAddedToCart(true)
-    setTimeout(() => setAddedToCart(false), 2000)
+    if (product.sizes.length > 0 && !selectedSize) return
+    addToCart({ id: product.id, slug: product.slug, name: product.name, brand: product.brand, image: images[0], price: product.price, oldPrice: product.oldPrice, color: product.colorName || 'Default', sizeRu: sizeObj?.ru || '', sizeEu: sizeObj?.eu || '', quantity: 1, addedAt: new Date().toISOString() })
   }
 
-  const handleBuyNow = () => {
-    if (product.sizes.length > 0 && !selectedSize) { setSizeDropdownOpen(true); return }
-    handleAddToCart()
-    navigate('/cart')
-  }
+  const handleBuyNow = () => { handleAddToCart(); navigate('/checkout') }
 
-  const prevImage = () => setActiveImageIndex((i) => (i === 0 ? allImages.length - 1 : i - 1))
-  const nextImage = () => setActiveImageIndex((i) => (i === allImages.length - 1 ? 0 : i + 1))
   const handleTouchStart = (e: React.TouchEvent) => setTouchStart(e.touches[0].clientX)
   const handleTouchEnd = (e: React.TouchEvent) => {
     if (touchStart === null) return
     const diff = touchStart - e.changedTouches[0].clientX
-    if (Math.abs(diff) > 50) { if (diff > 0) nextImage(); else prevImage() }
+    if (Math.abs(diff) > 50) {
+      if (diff > 0 && activeImg < images.length - 1) setActiveImg(i => i + 1)
+      else if (diff < 0 && activeImg > 0) setActiveImg(i => i - 1)
+    }
     setTouchStart(null)
   }
 
+  // Size rows (4 per row)
+  const sizeRows: typeof product.sizes[] = []
+  for (let i = 0; i < product.sizes.length; i += 4) sizeRows.push(product.sizes.slice(i, i + 4))
+
+  const accordions = [
+    { key: 'about', title: 'О товаре', content: product.description || `Силуэт ${product.brand} ${product.name} — стильные кроссовки для повседневной носки.` },
+    { key: 'specs', title: 'Характеристики', specs: [
+      { label: 'Бренд', value: product.brand },
+      { label: 'Цвет', value: product.colorName || '—' },
+      { label: 'Артикул', value: product.slug },
+    ]},
+  ]
+
   return (
     <>
-      <Helmet>
-        <title>{`${product.brand} ${product.name} — KICKSTEP`}</title>
-        <meta name="description" content={`${product.brand} ${product.name}. Цена ${product.price.toLocaleString('ru-RU')} ₽. Оригинал.`} />
-      </Helmet>
+      <Helmet><title>{product.brand} {product.name} — KICKSTEP</title></Helmet>
 
-      <div className="px-4 max-w-[1440px] mx-auto pb-8">
-        {/* Back */}
-        <button onClick={() => navigate(-1)} className="flex items-center gap-1 py-3 text-sm text-gray-600">
-          <ArrowLeft size={18} /> Назад
+      <style>{`
+        .product-layout { display: block; }
+        @media (min-width: 48rem) {
+          .product-layout { display: grid !important; grid-template-columns: 1fr 1fr; gap: 2rem; padding: 1rem var(--px); }
+          .product-gallery { position: sticky; top: 5rem; align-self: start; }
+        }
+      `}</style>
+
+      {/* Breadcrumbs + Back */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem var(--px)' }}>
+        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0A0A0A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
         </button>
+        <p style={{ fontFamily: FM, fontWeight: 500, fontSize: '0.6875rem', color: '#6E6E6E', flex: 1 }}>
+          Главная&nbsp;&nbsp;/&nbsp;&nbsp;Каталог&nbsp;&nbsp;/&nbsp;&nbsp;{product.brand}&nbsp;&nbsp;/&nbsp;&nbsp;{product.name}
+        </p>
+      </div>
 
-        <div className="lg:grid lg:grid-cols-2 lg:gap-8">
-          {/* Gallery */}
-          <div>
-            <div
-              className="relative rounded-[14px] overflow-hidden bg-white aspect-square"
-              onTouchStart={handleTouchStart}
-              onTouchEnd={handleTouchEnd}
-            >
-              <img src={allImages[activeImageIndex]} alt={product.name} className="w-full h-full object-contain p-4" />
-              <button onClick={handleToggleWishlist} className="absolute top-3 right-3">
-                <Heart size={24} strokeWidth={1.5} className={inWishlist ? 'fill-red-500 stroke-red-500' : 'fill-white stroke-gray-400'} />
-              </button>
-            </div>
-            {/* Dots */}
-            {allImages.length > 1 && (
-              <div className="flex justify-center gap-1.5 mt-3">
-                {allImages.map((_, i) => (
-                  <button key={i} onClick={() => setActiveImageIndex(i)}
-                    className={`w-1.5 h-1.5 rounded-full transition ${i === activeImageIndex ? 'bg-black' : 'bg-gray-400'}`}
-                  />
-                ))}
-              </div>
+      <div className="product-layout">
+      {/* Gallery column */}
+      <div className="product-gallery">
+      {/* Main image gallery */}
+      <div className="scrollbar-hide" style={{ display: 'flex', gap: '0', padding: '0', overflowX: 'auto', scrollSnapType: 'x mandatory', width: '100%' }}
+        onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+        {images.map((src, i) => (
+          <div key={i} style={{ flexShrink: 0, width: '100%', padding: '0 var(--px)', boxSizing: 'border-box', scrollSnapAlign: 'center' }}>
+            <img src={src} alt={product.name} style={{ width: '100%', aspectRatio: '1/1', borderRadius: '0.875rem', objectFit: 'contain', background: '#FFF', display: 'block' }} />
+          </div>
+        ))}
+      </div>
+
+      {/* Dots */}
+      {images.length > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem 0' }}>
+          {images.map((_, i) => (
+            <button key={i} onClick={() => setActiveImg(i)} style={{
+              width: '0.375rem', height: '0.375rem', borderRadius: '0.1875rem', border: 'none', padding: 0, cursor: 'pointer',
+              background: i === activeImg ? '#0A0A0A' : '#B5B5B5',
+            }} />
+          ))}
+        </div>
+      )}
+
+      </div>{/* end gallery column */}
+
+      {/* Info column */}
+      <div style={{ background: '#FFF', borderRadius: '1.875rem 1.875rem 0 0', padding: '1rem 1rem 0', marginTop: -16, position: 'relative', zIndex: 1 }}>
+
+        {/* Title */}
+        <p style={{ fontFamily: F, fontWeight: 600, fontSize: '1rem', color: '#0A0A0A' }}>
+          Кроссовки {product.brand} {product.name}
+        </p>
+
+        {/* Price + heart */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontFamily: FB, fontWeight: 700, fontSize: '1.25rem', color: '#0A0A0A' }}>
+              {product.price.toLocaleString('ru-RU')} ₽
+            </span>
+            {hasDiscount && (
+              <span style={{ fontFamily: F, fontWeight: 600, fontSize: '0.9375rem', color: '#6E6E6E', textDecoration: 'line-through' }}>
+                {product.oldPrice!.toLocaleString('ru-RU')} ₽
+              </span>
             )}
           </div>
-
-          {/* Info */}
-          <div className="mt-4 lg:mt-0">
-            <h1 className="text-xl font-semibold">{product.brand}</h1>
-            <p className="text-base text-gray-600 mt-1">{product.name}</p>
-
-            {/* Price */}
-            <div className="flex items-baseline gap-2 mt-3">
-              <span className="text-xl font-bold">{product.price.toLocaleString('ru-RU')} ₽</span>
-              {hasDiscount && (
-                <span className="text-sm text-gray-600 line-through">{product.oldPrice!.toLocaleString('ru-RU')} ₽</span>
-              )}
-            </div>
-
-            {/* Color siblings */}
-            {colorSiblings.length > 0 && (
-              <div className="flex gap-2 mt-4 overflow-x-auto scrollbar-hide">
-                {product.colorHex && (
-                  <div className="w-16 h-16 rounded-[14px] border-2 border-black overflow-hidden flex-shrink-0">
-                    <img src={product.images[0]} alt="" className="w-full h-full object-contain p-1" />
-                  </div>
-                )}
-                {colorSiblings.map((sib) => (
-                  <Link key={sib.slug} to={`/product/${sib.slug}`}
-                    className="w-16 h-16 rounded-[14px] border border-gray-300 overflow-hidden flex-shrink-0 hover:border-black transition"
-                  >
-                    <img src={sib.image} alt={sib.colorName} className="w-full h-full object-contain p-1" />
-                  </Link>
-                ))}
-              </div>
-            )}
-
-            {/* Size selector */}
-            {product.sizes.length > 0 && (
-              <div className="mt-4 relative">
-                <button
-                  onClick={() => setSizeDropdownOpen(!sizeDropdownOpen)}
-                  className="w-full flex items-center justify-between px-4 py-3 rounded-[24px] border border-gray-300 text-sm"
-                >
-                  <span className={selectedSize ? 'text-black' : 'text-gray-400'}>
-                    {selectedSize ? `EU ${selectedSize}` : 'Выберите размер'}
-                  </span>
-                  <ChevronDown size={18} className={`transition ${sizeDropdownOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {sizeDropdownOpen && (
-                  <div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-[14px] shadow-lg z-20 mt-1 max-h-[300px] overflow-y-auto">
-                    {product.sizes.map((size) => (
-                      <button
-                        key={size.eu}
-                        onClick={() => { setSelectedSize(size.eu); setSizeDropdownOpen(false) }}
-                        disabled={!size.inStock}
-                        className={`w-full text-left px-4 py-3 text-sm border-b border-gray-100 last:border-b-0 transition ${
-                          selectedSize === size.eu ? 'bg-black text-white' :
-                          size.inStock ? 'hover:bg-gray-100' : 'text-gray-400 line-through cursor-not-allowed'
-                        }`}
-                      >
-                        EU {size.eu}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="flex gap-3 mt-4">
-              <button onClick={handleBuyNow}
-                className="flex-1 py-3 bg-black text-white text-sm font-semibold rounded-[24px]"
-              >
-                КУПИТЬ СЕЙЧАС
-              </button>
-              <button onClick={handleAddToCart}
-                className={`flex items-center justify-center w-12 h-12 rounded-full border transition ${
-                  addedToCart ? 'bg-green-600 border-green-600' : 'border-gray-300 hover:border-black'
-                }`}
-              >
-                <ShoppingBag size={20} className={addedToCart ? 'text-white' : ''} />
-              </button>
-            </div>
-
-            {/* Description accordion */}
-            <div className="mt-6 p-4 bg-gray-100 rounded-[14px]">
-              <p className="text-base font-semibold">Описание</p>
-              <p className="text-sm text-gray-600 mt-2">
-                {product.description || `${product.brand} ${product.name} — оригинальные кроссовки.`}
-              </p>
-            </div>
-          </div>
+          <button onClick={toggleWishlist} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <path d="M19.513 12.583L12.013 20.011L4.513 12.583C4.018 12.102 3.629 11.523 3.369 10.884C3.108 10.245 2.984 9.558 3.002 8.868C3.02 8.178 3.181 7.5 3.474 6.875C3.768 6.25 4.187 5.693 4.706 5.238C5.226 4.783 5.834 4.441 6.492 4.233C7.15 4.025 7.844 3.955 8.53 4.028C9.217 4.101 9.88 4.316 10.48 4.658C11.079 5.001 11.601 5.463 12.013 6.017C12.427 5.467 12.949 5.009 13.548 4.67C14.147 4.331 14.81 4.12 15.494 4.049C16.178 3.978 16.87 4.049 17.526 4.258C18.182 4.466 18.787 4.808 19.305 5.262C19.822 5.715 20.24 6.271 20.533 6.893C20.826 7.516 20.988 8.192 21.007 8.88C21.027 9.568 20.904 10.252 20.647 10.891C20.39 11.529 20.004 12.107 19.513 12.589"
+                fill={inWishlist ? '#EC221F' : 'none'} stroke={inWishlist ? '#EC221F' : '#6E6E6E'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
         </div>
 
-        {/* Suggested */}
+        {/* Color */}
+        {product.colorName && (
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginTop: '1rem' }}>
+            <span style={{ fontFamily: F, fontWeight: 600, fontSize: '1rem', color: '#0A0A0A' }}>Цвет</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontFamily: FM, fontWeight: 500, fontSize: '1rem', color: '#0A0A0A' }}>{product.colorName}</span>
+              {product.colorHex && (
+                <span style={{ display: 'inline-block', width: '1rem', height: '1rem', borderRadius: '50%', background: product.colorHex, border: '1px solid #D1D1D1' }} />
+              )}
+            </span>
+          </div>
+        )}
+
+        {/* Color thumbnails */}
+        {product.colorSiblings.length > 0 && (
+          <div className="scrollbar-hide" style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', overflowX: 'auto' }}>
+            <div style={{ width: '6.5rem', height: '6.5rem', flexShrink: 0, border: '0.0625rem solid #0A0A0A', borderRadius: 0, overflow: 'hidden' }}>
+              <img src={images[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </div>
+            {product.colorSiblings.map((sib) => (
+              <Link key={sib.slug} to={`/product/${sib.slug}`} style={{ width: '6.5rem', height: '6.5rem', flexShrink: 0, overflow: 'hidden' }}>
+                <img src={sib.image} alt={sib.colorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {/* Size */}
+        {product.sizes.length > 0 && (
+          <>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginTop: '1.5rem' }}>
+              <span style={{ fontFamily: F, fontWeight: 600, fontSize: '1rem', color: '#0A0A0A' }}>Размер</span>
+              {selectedSize && <span style={{ fontFamily: FM, fontWeight: 500, fontSize: '1rem', color: '#0A0A0A' }}>{selectedSize}</span>}
+            </div>
+
+            {/* Size select dropdown */}
+            <div style={{ position: 'relative', marginTop: '0.5rem' }}>
+              <select
+                value={selectedSize || ''}
+                onChange={e => setSelectedSize(e.target.value || null)}
+                style={{
+                  width: '100%', height: '3rem', padding: '0 2.5rem 0 1rem', borderRadius: '0.875rem',
+                  border: '0.09375rem solid #D1D1D1', background: '#FFF', cursor: 'pointer',
+                  fontFamily: FM, fontWeight: 500, fontSize: '0.9375rem', color: selectedSize ? '#0A0A0A' : '#B5B5B5',
+                  appearance: 'none', WebkitAppearance: 'none', outline: 'none',
+                }}
+              >
+                <option value="" disabled>Выберите размер (EU)</option>
+                {product.sizes.map((size) => {
+                  const cm = euToCm(size.eu, product.brand)
+                  return (
+                    <option key={size.eu} value={size.eu} disabled={!size.inStock}>
+                      EU {size.eu}{cm ? ` — ${cm} см` : ''}{!size.inStock ? ' — нет в наличии' : ''}
+                    </option>
+                  )
+                })}
+              </select>
+              {/* Custom arrow */}
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0A0A0A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+                style={{ position: 'absolute', right: '0.75rem', top: '0.75rem', pointerEvents: 'none' }}>
+                <path d="M6 9L12 15L18 9"/>
+              </svg>
+            </div>
+            <Link to={`/size-guide#${(product.brand || '').toLowerCase().replace(/\s+/g,'-')}`} style={{ fontFamily: FM, fontWeight: 500, fontSize: '0.8125rem', color: '#6E6E6E', textDecoration: 'underline', marginTop: '0.5rem', display: 'inline-block' }}>
+              Таблица размеров
+            </Link>
+          </>
+        )}
+
+        {/* Add to cart */}
+        <button onClick={handleAddToCart} disabled={product.sizes.length > 0 && !selectedSize} style={{
+          display: 'flex', width: '100%', height: '3rem', alignItems: 'center', justifyContent: 'center',
+          borderRadius: '1.5rem', background: (product.sizes.length > 0 && !selectedSize) ? '#D1D1D1' : '#0A0A0A',
+          border: 'none', cursor: 'pointer', marginTop: '1rem',
+          fontFamily: F, fontWeight: 600, fontSize: '0.875rem', color: '#FFF',
+        }}>
+          Добавить в корзину
+        </button>
+
+        {/* Buy now */}
+        <button onClick={handleBuyNow} disabled={product.sizes.length > 0 && !selectedSize} style={{
+          display: 'flex', width: '100%', height: '3rem', alignItems: 'center', justifyContent: 'center',
+          borderRadius: '1.5rem', background: '#FFF', marginTop: '0.5rem',
+          border: '0.09375rem solid #D1D1D1', cursor: 'pointer',
+          fontFamily: F, fontWeight: 600, fontSize: '0.875rem', color: '#0A0A0A',
+        }}>
+          Купить сейчас
+        </button>
+
+        {/* Accordions */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1.5rem' }}>
+          {accordions.map((acc) => (
+            <div key={acc.key} style={{ background: '#F4F4F4', borderRadius: '0.875rem', padding: '1rem' }}>
+              <button onClick={() => setOpenAccordion(openAccordion === acc.key ? null : acc.key)} style={{
+                display: 'flex', height: '1.5rem', alignItems: 'center', justifyContent: 'space-between', width: '100%',
+                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+              }}>
+                <span style={{ fontFamily: F, fontWeight: 600, fontSize: '1rem', color: '#0A0A0A', flex: 1, textAlign: 'left' }}>{acc.title}</span>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0A0A0A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  {openAccordion === acc.key ? <path d="M18 15L12 9L6 15"/> : <path d="M6 9L12 15L18 9"/>}
+                </svg>
+              </button>
+              {openAccordion === acc.key && acc.content && (
+                <p style={{ fontFamily: FR, fontWeight: 400, fontSize: '0.875rem', color: '#0A0A0A', marginTop: '0.5rem', lineHeight: 'normal' }}>{acc.content}</p>
+              )}
+              {openAccordion === acc.key && acc.specs && (
+                <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {acc.specs.map((s, i) => (
+                    <div key={i} style={{ display: 'flex', gap: '0.625rem' }}>
+                      <span style={{ flex: 1, fontFamily: FR, fontWeight: 400, fontSize: '0.875rem', color: '#6E6E6E' }}>{s.label}</span>
+                      <span style={{ flex: 1, fontFamily: FR, fontWeight: 400, fontSize: '0.875rem', color: '#0A0A0A' }}>{s.value}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Related products */}
         {suggestedProducts.length > 0 && (
-          <section className="mt-8">
-            <h2 className="text-xl font-semibold mb-4">Вам также понравится</h2>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div style={{ marginTop: '2rem' }}>
+            <p style={{ fontFamily: F, fontWeight: 600, fontSize: '1.25rem', color: '#0A0A0A', marginBottom: '0.5rem' }}>Похожие товары</p>
+            <div className="scrollbar-hide" style={{ display: 'flex', gap: '1rem', overflowX: 'auto' }}>
               {suggestedProducts.map((p) => (
-                <ProductCard key={p.id} product={p} />
+                <div key={p.id} style={{ flexShrink: 0, width: '9.75rem' }}>
+                  <ProductCard product={p} />
+                </div>
               ))}
             </div>
-          </section>
+          </div>
         )}
+
+        {/* Recently viewed */}
+        {recentSlugs.length > 0 && (
+          <div style={{ marginTop: '2rem' }}>
+            <p style={{ fontFamily: F, fontWeight: 600, fontSize: '1.25rem', color: '#0A0A0A', marginBottom: '0.5rem' }}>Ранее просмотренные</p>
+            <div className="scrollbar-hide" style={{ display: 'flex', gap: '1rem', overflowX: 'auto' }}>
+              {recentSlugs.map((s) => <RecentCard key={s} slug={s} />)}
+            </div>
+          </div>
+        )}
+
+        <div style={{ height: '2rem' }} />
       </div>
+      </div>{/* end product-layout */}
     </>
   )
+}
+
+export default function ProductPage() {
+  const isDesktop = useIsDesktop()
+  const { slug } = useParams<{ slug: string }>()
+  const { data: apiProduct } = useProduct(slug || '')
+  const product = apiProduct ? mapApiProduct(apiProduct) : null
+  const title = product ? `${product.brand} ${product.name} — KICKSTEP` : 'KICKSTEP'
+
+  return isDesktop
+    ? <><Helmet><title>{title}</title></Helmet><ProductDesktop /></>
+    : <ProductMobile />
 }
